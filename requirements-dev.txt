@@ -1,3 +1,4 @@
 -r requirements.txt
 pytest
 bump-pydantic==0.6 # (in dev as it is one time use)
+rise==5.7.1
