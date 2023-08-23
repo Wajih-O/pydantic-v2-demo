@@ -47,3 +47,7 @@ class Tweet(BaseModel):
         if len(v) > 140:
             raise ValidationError('text should be less than 140 characters')
         return v.replace('\n', ' ')
+
+    class Config:
+        # validation on update
+        validate_assignment = True
