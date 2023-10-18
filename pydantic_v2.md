@@ -4,7 +4,7 @@
 
 demo the updates announced in the [v2 plan](https://docs.pydantic.dev/latest/blog/pydantic-v2/)
 
-version used: Pydantic v2(.2)
+version used: Pydantic v2.2
 
 ---
 
@@ -48,22 +48,21 @@ class Car(BaseModel):
 
 ## the V2
 
-Motivations: performance, maintainability
+> Motivations: performance, maintainability, composability, and strict mode.
 
- 2 packages design
+ Two packages design
 
-1. pydantic (pure python)
-
-2. pydantic-core (rust (binary), stubs)
+1. **pydantic** (pure python, no Cython)
+2. **pydantic-core** (rust (binary), stubs)
 
 --
 
 ### Validation flow
 
 1. **pydantic** read the type hints and construct a "core-schema dict"
-2. **pydantic-core** process the core schema and return a SchemaValidator
-3. **pydantic** calls schema_validator on the data (that runs the validator pydantic-core side)
-4. **pydantic-core** returns the result of the validation
+2. **pydantic-core** process the core schema and return a **SchemaValidator**
+3. **pydantic** calls schema_validator on the data (runs pydantic-core side)
+4. **pydantic-core** validate, raise or returns the result (data)
 
 <!-- ref: https://youtu.be/pWZw7hYoRVU?t=813 -->
 
@@ -225,7 +224,7 @@ with pytest.raises(ValidationError):
 
 Solves inconsistency around data conversion
 
-If the input data has a single and intuitive representation in the field's type and no data is lost during the conversion then the data will be converted; otherwise a  validation error is raised.
+> If the input data has a single and intuitive representation in the field's type and no data is lost during the conversion then the data will be converted; otherwise a  validation error is raised.
 
 --
 
@@ -256,22 +255,40 @@ WithStringFields(s1='5', s2='test')
 **Pydantic-core** can parse json directly into a model or output type:
 
 - Improves performance
-- avoids issue with strictness
+- Avoids issue with strictness <sub> <sup> (no tuple in json) with external parser would parse it to a list which will be rejected in strict mode  </sup></sub>
 
 ```python
-class WithStringFieldsAndTuple(WithStringFields):
+class WithATuple(WithStringFields):
+    model_config = dict(strict=True)
     t3: tuple[int, int, str]
 
 json_str = '{"s1": "s1", "s2": "s2", "t3": [1, 2, "third"]}'
 ```
 
 ```python
-print(WithStringFieldsAndTuple.model_validate_json(json_str))
+WithATuple.model_validate_json(json_str)
+```
+
+works fine,
+
+--
+
+while explicitly using python json parser
+
+```python
+try:
+    WithATuple.model_validate(json.loads(json_str))
+except ValidationError as e:
+    print(e)
 ```
 
 ```output
-s1='s1' s2='s2' t3=(1, 2, 'third')
+1 validation error for WithATuple
+t3
+  Input should be a valid tuple [type=tuple_type, input_value=[1, 2, 'third'], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.2/v/tuple_type
 ```
+
 
 --
 
@@ -333,7 +350,9 @@ In pydantic V1 the core of all validation was a pydantic model this led to:
 
 ```python
 from dataclasses import dataclass
-from pydantic import model_validator, TypeAdapter # TypeAdapter is the new name for AnalyzedType (https://github.com/pydantic/pydantic/issues/5580)
+from pydantic import model_validator, TypeAdapter 
+#TypeAdapter is the new name for AnalyzedType
+# (https://github.com/pydantic/pydantic/issues/5580)
 
 @dataclass
 class Point:
@@ -352,17 +371,18 @@ class Square:
     side: float
 
 
-@dataclass
-class Rectangle:
+class Rectangle(BaseModel):
     center: Point
     width: float
     height: float
 
-    @model_validator(mode='before')
-    def check_width_and_height(cls, values):
-        if values.get('width') is None and values.get('height') is None:
-            raise ValueError('width or height must be set')
-        return values
+    @model_validator(mode='after')
+    def infer_width_and_height(cls, data):
+        if data.width <= 0:
+            data.width *= -1
+        if data.height <= 0:
+            data.height *= -1
+        return data
 
 ```
 
@@ -372,14 +392,16 @@ simple_forms = TypeAdapter(Circle|Square|Rectangle)
 
 for form in [{"center": {"x": 0, "y": 0}, "radius": 1},
              {"center": {"x": 0, "y": 0}, "side": 1},
-             {"center": {"x": 0, "y": 0}, "width": 1, "height": 1}]:
-    print(simple_forms.dump_json(simple_forms.validate_python(form)))
+             {"center": {"x": 0, "y": 0},
+             "width": 10, "height": -5}]:
+print(simple_forms.dump_json(
+    simple_forms.validate_python(form)))
 ```
 
 ```output
     b'{"center":{"x":0.0,"y":0.0},"radius":1.0}'
     b'{"center":{"x":0.0,"y":0.0},"side":1.0}'
-    b'{"center":{"x":0.0,"y":0.0},"width":1.0,"height":1.0}'
+    b'{"center":{"x":0.0,"y":0.0},"width":10.0,"height":5.0}'
 ```
 
 ---
@@ -458,7 +480,7 @@ with pytest.raises(ValidationError):
 
 <!-- alternative source/name for field, enable seamless mapping of different names of fields to corresponding model -->
 
-it can support alias paths as well as simple string aliases to flatten data as it's validated
+supports simple alias as well as alias paths with flatten feature for mapping nested data
 
 ```python
 from pydantic import AliasPath
@@ -476,6 +498,8 @@ data = {
 ```python
 class FooSimplePath(BaseModel):
     bar: str = Field(validation_alias=AliasPath("al-bar"))
+    # equivalent to
+    # bar: str = Field(validation_alias="al-bar")
 
 class FooLongerPath(BaseModel):
     bar: str = Field(validation_alias=\
@@ -538,8 +562,7 @@ pprint(tweet.model_dump())
 
 model with a reference to it self.
 
-Note:
-this would segfault in v1
+<!-- Note: this would segfault in v1 -->
 
 ```python
 class Energy(BaseModel):
@@ -573,7 +596,8 @@ e.model_dump_json() # v2 (as json is deprecated)
 
 ---
 
-## Generics
+## Generics (enhanced)
+
 
 Example: a stack of data
 
@@ -670,7 +694,6 @@ BinaryTree[int].model_validate_json(tree.model_dump_json())
 
 in v1 it asks the value, in v2 it asks the type annotation to do the serialization
 it solves **"do not ask the type"** problem
-
 
 ```python
 class PublicCustomer(BaseModel):
