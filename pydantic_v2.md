@@ -68,9 +68,9 @@ class Car(BaseModel):
 
 ---
 
-### V2 perf. and more
+### Performance
 
-Using rust/pyo3 underneath:
+Using rust underneath (via pyo3):
 
 Gain in perf. (order of magnitude 10x, 5x to 50 x)
 
@@ -80,16 +80,19 @@ Gain in perf. (order of magnitude 10x, 5x to 50 x)
 
 ---
 
-but also in V2 ...
+performance but also ...
 
 ---
 
 ## Namespace clean-up
 
-All methods on models will start with model_, fields' names will not be allowed to start with "model" (aliases can be used if required).
+All methods on models will start with **model_**
 
-- avoid confusing gotchas when field names clash with methods on a model
-- make it safer to add more methods
+Fields' names will not be allowed to start with "model"
+ (aliases can be used if required).
+
+- Avoid field names clash with methods
+- Make it safer to add more methods
 
 --
 
@@ -288,7 +291,6 @@ t3
   Input should be a valid tuple [type=tuple_type, input_value=[1, 2, 'third'], input_type=list]
     For further information visit https://errors.pydantic.dev/2.2/v/tuple_type
 ```
-
 
 --
 
