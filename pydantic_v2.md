@@ -1,9 +1,10 @@
-# Pydantic V2
+# Pydantic V2 features
 
-[https://github.com/Wajih-O/pydantic-v2-demo](https://github.com/Wajih-O/pydantic-v2-demo)
+[pydantic-v2-demo](https://github.com/Wajih-O/pydantic-v2-demo)
 
-demo the updates announced in the v2 plan -> https://docs.pydantic.dev/latest/blog/pydantic-v2/
-from a Pydantic v2(.2) perspective
+demo the updates announced in the [v2 plan](https://docs.pydantic.dev/latest/blog/pydantic-v2/)
+
+version used: Pydantic v2(.2)
 
 ---
 
@@ -73,6 +74,7 @@ Motivations: performance, maintainability
 Using rust/pyo3 underneath:
 
 Gain in perf. (order of magnitude 10x, 5x to 50 x)
+
 - Multithreading (perf.)
 - Reusing rust libraries (perf. + maintainability)
 - More explicit error handling (within rust) (maintainability)
@@ -185,10 +187,9 @@ class BaseModel:
 
 ---
 
-##  Strict mode
+## Strict mode
 
 Where data is not coerced but rather an error is raised
-
 
 ```python
 class Energy(BaseModel):
@@ -197,14 +198,13 @@ class Energy(BaseModel):
         return Energy(value=kwh * 10e3)
 ```
 
-
 ```python
 Energy(value="3") # data coerced
 ```
 
+```output
     Energy(value=3)
-
-
+```
 
 ```python
 class EnergyStrictMode(BaseModel):
@@ -221,9 +221,7 @@ with pytest.raises(ValidationError):
 
 ---
 
-## Formalized Conversion table
-
-https://docs.pydantic.dev/latest/usage/conversion_table/
+## Formalized <a href="https://docs.pydantic.dev/latest/usage/conversion_table/"> conversion table </a>
 
 Solves inconsistency around data conversion
 
@@ -231,10 +229,9 @@ If the input data has a single and intuitive representation in the field's type 
 
 --
 
-### string fields are the exception
+### String fields
 
-only **str, bytes and bytearray** are valid as inputs to string fields.
-
+only **str, bytes and bytearray** are valid as inputs.
 
 ```python
 class WithStringFields(BaseModel):
@@ -248,7 +245,9 @@ WithStringFields(s1="5", s2=b"test")
 
 ```
 
-    WithStringFields(s1='5', s2='test')
+```output
+WithStringFields(s1='5', s2='test')
+```
 
 ---
 
@@ -260,22 +259,30 @@ WithStringFields(s1="5", s2=b"test")
 - avoids issue with strictness
 
 ```python
-class WithStringFieldsandTuple(WithStringFields):
+class WithStringFieldsAndTuple(WithStringFields):
     t3: tuple[int, int, str]
 
-print(WithStringFieldsandTuple.model_validate_json('{"s1": "s1", "s2": "s2", "t3": [1, 2, "third"]}'))
+json_str = '{"s1": "s1", "s2": "s2", "t3": [1, 2, "third"]}'
 ```
 
-    s1='s1' s2='s2' t3=(1, 2, 'third')
+```python
+print(WithStringFieldsAndTuple.model_validate_json(json_str))
+```
+
+```output
+s1='s1' s2='s2' t3=(1, 2, 'third')
+```
 
 --
 
-
+<!--
 In future direct validation of JSON will also allow (maybe in 2.1):
+
 - Parsing in a separate thread while starting validation in the main thread
 - Line numbers from JSON to be included in the validation errors
 
 (check an example of json validation)
+-->
 
 ---
 
@@ -290,19 +297,18 @@ A Nullable (accepting None as a value) might be also required
 class Foo(BaseModel):
     f1: str  # required, cannot be None
     f2: str | None  # required, can be None - same as Optional[str] / Union[str, None]
-    f22: Optional[str]  # required, can be None (while in Pydantic v1 it is set to None)
-    f3: str | None = None  # not required, can be None
-    f4: str = 'Foobar'  # not required, but cannot be None
+    f3: Optional[str]  # required, can be None (while in Pydantic v1 it is set to None)
+    f4: str | None = None  # not required, can be None
+    f5: str = 'Foobar'  # not required, but cannot be None
 
 ```
 
-
 ```python
-Foo(f1="test", f2="123", f22="22")
-Foo(f1="test", f2=None, f22="22")
+Foo(f1="test", f2="123", f3="22")
+Foo(f1="test", f2=None, f3="22")
 
 with pytest.raises(ValidationError):
-    # as f22 is required
+    # as f3 is required
     Foo(f1="test", f2="123")
 
 ```
@@ -314,15 +320,14 @@ with pytest.raises(ValidationError):
 
 In pydantic V1 the core of all validation was a pydantic model this led to:
 
- - Performance penalty
- - Extra complexity when the output data type was not  a model
-
+- Performance penalty
+- Extra complexity when the output data type was not  a model
 
 --
 
-* In V2 pydantic-core operates on a tree of validators with no model type required at the base of that tree.
+- In V2 pydantic-core operates on a tree of validators with no model type required at the base of that tree.
 
-* It can there fore validate a single string or datetime value a TypedDict or a Model equally easily
+- It can therefore validate a single string or datetime value a TypedDict or a Model equally easily
 
 --
 
@@ -371,9 +376,11 @@ for form in [{"center": {"x": 0, "y": 0}, "radius": 1},
     print(simple_forms.dump_json(simple_forms.validate_python(form)))
 ```
 
+```output
     b'{"center":{"x":0.0,"y":0.0},"radius":1.0}'
     b'{"center":{"x":0.0,"y":0.0},"side":1.0}'
     b'{"center":{"x":0.0,"y":0.0},"width":1.0,"height":1.0}'
+```
 
 ---
 
@@ -381,11 +388,9 @@ for form in [{"center": {"x": 0, "y": 0}, "radius": 1},
 
 logic before and after catching error, new error or defaults
 
-
 ```python
-from pydantic import field_validator
-
 class Energy(BaseModel):
+
     value: int  # energy value in wh
 
     @field_validator("value", mode="wrap")
@@ -396,21 +401,20 @@ class Energy(BaseModel):
             return handler(value)
         except ValidationError:
             return 0 # After handler catching error
+    #...
+```
 
-    def from_kwh(kwh: int) -> Self:
-        return Energy(value=kwh * 10e3)
-
+```python
 Energy(value="null")
 ```
 
-
-    Energy(value=0)
+```output
+Energy(value=0)
+```
 
 ---
 
-
 ## Validation using context
-
 
 ```python
 import json
@@ -431,38 +435,33 @@ class User(BaseModel):
 
 ```python
 vip_ids = [1, 2, 3]
-User.model_validate_json(json.dumps({"id": 1, "name": "John"}),
-                        context = {"vip_ids": vip_ids})
+User.model_validate_json(
+    json.dumps({"id": 1, "name": "John"}),
+    context = {"vip_ids": vip_ids})
 ```
 
-
+```output
     User(id=1, name='John')
-
+```
 
 ```python
 with pytest.raises(ValidationError):
-    User.model_validate_json(json.dumps({"id": 4, "name": "John"}),
-                        context = {"vip_ids": vip_ids})
+    User.model_validate_json(
+    json.dumps({"id": 4, "name": "John"}),
+    context = {"vip_ids": vip_ids}
+)
 ```
-
 
 ---
 
-
 ## More powerful alias(es)
+
+<!-- alternative source/name for field, enable seamless mapping of different names of fields to corresponding model -->
 
 it can support alias paths as well as simple string aliases to flatten data as it's validated
 
-
 ```python
 from pydantic import AliasPath
-
-class FooSimplePath(BaseModel):
-    bar: str = Field(validation_alias=AliasPath("al-bar"))
-
-
-class FooLongerPath(BaseModel):
-    bar: str = Field(validation_alias=AliasPath('baz', 2, 'qux'))
 
 data = {
     'al-bar': "simple",
@@ -470,40 +469,68 @@ data = {
         {'qux': 'a'},
         {'qux': 'b'},
         {'qux': 'longer'},
-        {'qux': 'd'},
     ]
 }
+```
 
+```python
+class FooSimplePath(BaseModel):
+    bar: str = Field(validation_alias=AliasPath("al-bar"))
+
+class FooLongerPath(BaseModel):
+    bar: str = Field(validation_alias=\
+    AliasPath('baz', 2, 'qux'))
+```
+
+```python
 assert FooSimplePath(**data).bar == "simple"
 assert FooLongerPath(**data).bar == "longer"
 ```
 
 --
 
+```python
+from pydantic import AliasChoices
+
+class FooPrecedenceRule(BaseModel):
+    bar: str = Field(validation_alias=AliasChoices("al-bar",
+                    AliasPath('baz', 2, 'qux')))
+
+assert FooPrecedenceRule(**data).bar == "simple"
+data.pop('al-bar')
+assert FooPrecedenceRule(**data).bar == "longer"
+
+```
+
+--
+
+Tweet data mapping example
 
 ```python
-# Another (maybe better) alias example
-import json
-from pprint import pprint
-
-
 class TweetSimplified(BaseModel):
     id : str = Field(alias='id_str')
     text: str
-    user_id : int  = Field(validation_alias=AliasPath('user', 'id'))
+    user_id : int = Field(validation_alias=AliasPath('user', 'id'))
     url : str = Field(validation_alias=AliasPath("entities", "urls", 0 , "unwound", "url")) # todo: get the url list
+
 
 with open("tweet.json", "r", encoding="utf-8") as tweet_file:
     tweet = TweetSimplified(**json.load(tweet_file))
 
 pprint(tweet.model_dump())
 ```
+
+
+```output
+
+
     {'id': '850006245121695744',
      'text': '1/ Today we’re sharing our vision for the future of the Twitter API '
              'platform!\n'
              'https://t.co/XweGngmxlP',
      'url': 'https://cards.twitter.com/cards/18ce53wgo4h/3xo1c',
      'user_id': 2244994945}
+```
 
 ---
 
@@ -513,7 +540,6 @@ model with a reference to it self.
 
 Note:
 this would segfault in v1
-
 
 ```python
 class Energy(BaseModel):
@@ -526,27 +552,24 @@ class Energy(BaseModel):
         return Energy(offset=offset_ , slots=[])
 ```
 
-
 ```python
 e = Energy(offset=0)
-e.slots.append(e) # circular reference in Pydantic v1 that would raise a recursion error.
+e.slots.append(e)
 ```
-
 
 ```python
-e.model_dump()
+e.json() # in v1 would segfault
+# RecursionError: maximum recursion depth exceeded while calling a Python object
+# (note that this is a v1 interface)
 ```
-
-    {'offset': 0, 'slots': [{}]}
-
-
-
-
+while in v2
 ```python
-e.simplify().model_dump()
+e.model_dump_json() # v2 (as json is deprecated)
 ```
 
-    {'offset': 0, 'slots': []}
+```output
+'{"offset":0,"slots":[{"offset":0,"slots":[{}]}]}'
+```
 
 ---
 
@@ -590,12 +613,54 @@ class EnergyContributions(Stack[Energy]):
         self.add(Energy(offset=offset_))
         return self
 
+EnergyContributions(data = [Energy(offset=i) for i in range(10)]).simplify().model_dump()
+```
+
+```output
+    {'data': [{'offset': 45, 'slots': []}]}
+
+```
+
+--
+
+### Recursive Generics
+
+```python
+DataT = TypeVar('DataT')
+
+class BinaryTree(BaseModel, Generic[DataT]):
+    left: Optional[Union[DataT, "BinaryTree[DataT]"]] = None
+    right: Optional[Union[DataT, "BinaryTree[DataT]"]] = None
+    data: DataT
+
+    def add_most_right(self, item: DataT):
+        if self.right is None:
+            self.right = item
+        else:
+            self.right.add_most_right(item)
+
+    def traverse(self):
+        """ traverse depth first, (left to right) """
+        if self.left:
+            yield from self.left.traverse()
+        yield self.data
+        if self.right:
+            yield from self.right.traverse()
 ```
 
 ```python
-EnergyContributions(data = [Energy(offset=i) for i in range(10)]).simplify().model_dump()
 
-    {'data': [{'offset': 45, 'slots': []}]}
+# let's build a tree
+tree :BinaryTree[int] = BinaryTree(left=BinaryTree(data=1),
+    data=2, right=BinaryTree(data=3))
+tree.add_most_right(BinaryTree(data=4))
+
+assert list(tree.traverse())==list(range(1,5))
+```
+
+```python
+
+BinaryTree[int].model_validate_json(tree.model_dump_json())
 
 ```
 
@@ -613,10 +678,10 @@ class PublicCustomer(BaseModel):
     name: str
 
 class PrivateCustomer(PublicCustomer):
+    """ with sensible data """
     vat_number: str = Field(validation_alias=AliasPath("vat", "number"))
     email: str = Field(validation_alias=AliasPath("contact", "email"))
     phone: str = Field(validation_alias=AliasPath("contact", "phone"))
-
 ```
 
 --
@@ -641,9 +706,11 @@ private_customer = PrivateCustomer.model_validate({"vat": {"number": "123"}, "id
 print(PublicAccount(account_id=1, customer=private_customer).model_dump())
 ```
 
-    {'account_id': 1, 'customer': {'id': 123, 'name': 'John'}}
+```output
+{'account_id': 1, 'customer': {'id': 123, 'name': 'John'}}
+```
 
---
+---
 
 ## Migration
 
